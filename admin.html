@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>لوحة تحكم Print Club</title>
+<style>
+*{box-sizing:border-box}body{font-family:Tahoma;background:#eef1f2;margin:0;padding:20px;color:#1d4ed8}
+h1{margin:0 0 20px}.box{background:#fff;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 5px 15px rgba(0,0,0,.08)}
+input,select,button{padding:10px;border-radius:10px;border:2px solid #ddd;font:inherit;width:100%;margin-top:6px}
+button{background:#2563eb;color:#fff;border:0;cursor:pointer;font-weight:700}button:hover{opacity:.9}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{border:2px solid #eee;border-radius:12px;padding:10px;margin-top:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.card img{width:60px;height:60px;object-fit:contain;border-radius:10px;background:#f5f5f5}
+.stat{font-size:28px;font-weight:900;color:#111}.hide{display:none}
+.del{background:#d6334b}.ok{background:#0f8f6c}
+</style></head>
+<body>
+<h1>🎨 لوحة تحكم Print Club</h1>
+
+<div class="box" id="loginBox">
+<h3>دخول الأدمن</h3>
+<input id="u" placeholder="اسم الأدمن" value="admin">
+<input id="p" type="password" placeholder="الباسورد" value="admin123">
+<button onclick="login()">دخول</button><p id="loginErr" style="color:red"></p>
+</div>
+
+<div id="dash" class="hide">
+<div class="box row">
+<div><div>إجمالي الطلبات</div><div class="stat" id="s1">0</div></div>
+<div><div>إجمالي الفلوس</div><div class="stat" id="s2">0 جنيه</div></div>
+<div><div>طلبات النهاردة</div><div class="stat" id="s3">0</div></div>
+</div>
+
+<div class="box">
+<h3>➕ إضافة منتج جديد</h3>
+<div class="row">
+<input id="nName" placeholder="اسم الاستيكر - مثال: ستيتش">
+<input id="nPrice" type="number" value="5" placeholder="السعر">
+<input id="nStock" type="number" value="100" placeholder="المخزون">
+<select id="nCat"><option value="s">استيكرات</option><option value="p">بوسترات</option><option value="g">تخرج</option></select>
+</div>
+<input id="nImg" type="file" accept="image/*">
+<button onclick="addProduct()">إضافة المنتج</button>
+</div>
+
+<div class="box"><h3>📦 المنتجات</h3><div id="products"></div></div>
+<div class="box"><h3>🧾 الطلبات</h3><button onclick="loadAll()">تحديث الطلبات</button><div id="orders"></div></div>
+</div>
+
+<script>
+const API='http://localhost:3000/api';
+let token=localStorage.getItem('pc-token')||'';
+if(token){document.getElementById('loginBox').classList.add('hide');document.getElementById('dash').classList.remove('hide');loadAll();}
+
+async function login(){
+  const r=await fetch(API+'/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});
+  const d=await r.json();
+  if(!r.ok){loginErr.textContent=d.error;return;}
+  token=d.token;localStorage.setItem('pc-token',token);
+  loginBox.classList.add('hide');dash.classList.remove('hide');loadAll();
+}
+async function loadAll(){
+  const h={Authorization:'Bearer '+token};
+  const s=await (await fetch(API+'/admin/stats',{headers:h})).json();
+  s1.textContent=s.totalOrders; s2.textContent=s.totalRevenue+' جنيه'; s3.textContent=s.todayOrders;
+  const ps=await (await fetch(API+'/products')).json();
+  products.innerHTML=ps.length?ps.map(p=>`<div class="card"><div style="display:flex;gap:10px;align-items:center">${p.image?`<img src="http://localhost:3000${p.image}">`:''}<b>${p.name}</b> - ${p.price} جنيه - مخزون ${p.stock}</div><button class="del" onclick="delP(${p.id})" style="width:auto">حذف</button></div>`).join(''):'لسه مفيش منتجات';
+  const os=await (await fetch(API+'/admin/orders',{headers:h})).json();
+  orders.innerHTML=os.length?os.map(o=>`<div class="card"><div><b>#${o.id} - ${o.customer_name}</b> - ${o.phone}<br>${o.city} - ${o.address}<br>${o.items.map(i=>i.product_name+' × '+i.qty).join(' | ')}<br><b>الإجمالي: ${o.total_price} جنيه</b> - الحالة: ${o.status}</div><select onchange="setStatus(${o.id},this.value)" style="width:130px"><option ${o.status=='new'?'selected':''} value="new">جديد</option><option ${o.status=='confirmed'?'selected':''} value="confirmed">تم التأكيد</option><option ${o.status=='preparing'?'selected':''} value="preparing">بيجهز</option><option ${o.status=='shipped'?'selected':''} value="shipped">اتشحن</option><option ${o.status=='delivered'?'selected':''} value="delivered">اتسلم</option></select></div>`).join(''):'لسه مفيش طلبات';
+}
+async function addProduct(){
+  const fd=new FormData(); fd.append('name',nName.value); fd.append('price',nPrice.value); fd.append('stock',nStock.value); fd.append('category',nCat.value);
+  if(nImg.files[0]) fd.append('image',nImg.files[0]);
+  const r=await fetch(API+'/admin/products',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
+  if(r.ok){alert('تمت الإضافة!'); nName.value=''; loadAll();} else alert('في مشكلة، اتأكد انك مسجل دخول');
+}
+async function delP(id){ if(!confirm('متأكد تحذف؟'))return; await fetch(API+'/admin/products/'+id,{method:'DELETE',headers:{Authorization:'Bearer '+token}}); loadAll(); }
+async function setStatus(id,st){ await fetch(API+'/admin/orders/'+id+'/status',{method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({status:st})}); loadAll(); }
+</script></body></html>

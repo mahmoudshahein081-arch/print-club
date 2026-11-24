@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Print Club - استيكرات وبوسترات</title>
+<style>
+*{box-sizing:border-box}body{font-family:Tahoma;margin:0;background:#f6f2f7;color:#222}
+header{background:#1d4ed8;color:#fff;padding:16px;text-align:center;position:sticky;top:0;z-index:10}
+header h1{margin:0;font-size:22px}header p{margin:4px 0 0;opacity:.9}
+.wrap{max-width:1100px;margin:auto;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 5px 15px rgba(0,0,0,.08);display:flex;flex-direction:column}
+.card img{width:100%;height:170px;object-fit:contain;background:#fff;padding:8px}
+.card .b{padding:10px}.price{color:#1d4ed8;font-weight:900;font-size:18px}
+button{border:0;border-radius:10px;padding:10px;cursor:pointer;font:inherit;font-weight:700}
+.add{background:#111;color:#fff;width:100%;margin-top:8px}
+.cart{position:fixed;left:12px;bottom:12px;background:#111;color:#fff;padding:12px 16px;border-radius:999px;font-weight:800;cursor:pointer;z-index:20}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:30}
+.modal.open{display:flex}.sheet{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:16px;max-height:85vh;overflow:auto}
+input,textarea{width:100%;padding:10px;border:2px solid #ddd;border-radius:10px;margin-top:6px;font:inherit}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee}
+.qty button{width:32px;height:32px;padding:0;background:#eee;color:#111}
+.checkout{background:#0f8f3a;color:#fff;width:100%;margin-top:10px}
+</style></head>
+<body>
+<header><h1>🎨 Print Club</h1><p>استيكرات وبوسترات - اطلب وهيوصلك لحد البيت</p></header>
+<div class="wrap"><h2>كل المنتجات</h2><div class="grid" id="grid">جاري التحميل...</div></div>
+<div class="cart" onclick="openCart()">🛒 السلة (<span id="cCount">0</span>) - <span id="cTotal">0</span> جنيه</div>
+<div class="modal" id="modal"><div class="sheet">
+<h3>🛒 سلتك</h3><div id="cartItems"></div>
+<h3 style="margin-top:16px">بياناتك</h3>
+<input id="fName" placeholder="اسمك بالكامل">
+<input id="fPhone" placeholder="رقم موبايلك - 01xxxxxxxxx">
+<input id="fCity" placeholder="مدينتك - مثال: فاقوس">
+<textarea id="fAddr" placeholder="عنوانك بالتفصيل"></textarea>
+<input id="fNotes" placeholder="ملاحظات (اختياري)">
+<button class="checkout" onclick="checkout()">تأكيد الطلب ✅</button>
+<button onclick="closeCart()" style="width:100%;margin-top:8px;background:#eee">قفل</button>
+<p id="msg" style="text-align:center;font-weight:700"></p>
+</div></div>
+<script>
+const API='http://localhost:3000/api';
+let products=[], cart={};
+async function load(){
+  products=await (await fetch(API+'/products')).json();
+  grid.innerHTML=products.length?products.map(p=>`
+  <div class="card"><img src="${p.image?'http://localhost:3000'+p.image:'https://placehold.co/300x300?text=Print+Club'}"><div class="b"><b>${p.name}</b><div class="price">${p.price} جنيه</div><button class="add" onclick="add(${p.id})">أضف للسلة +</button></div></div>`).join(''):'لسه مفيش منتجات، ضيف من لوحة التحكم';
+}
+function add(id){cart[id]=(cart[id]||0)+1; update();}
+function update(){
+  let c=0,t=0; for(let id in cart){let p=products.find(x=>x.id==id); if(p){c+=cart[id]; t+=cart[id]*p.price;}}
+  cCount.textContent=c; cTotal.textContent=t;
+  cartItems.innerHTML=Object.keys(cart).length?Object.keys(cart).map(id=>{let p=products.find(x=>x.id==id); return `<div class="item"><span>${p.name} - ${p.price}ج</span><span class="qty"><button onclick="chg(${id},-1)">-</button> ${cart[id]} <button onclick="chg(${id},1)">+</button></span></div>`}).join(''):'السلة فاضية';
+}
+function chg(id,d){cart[id]+=d; if(cart[id]<=0) delete cart[id]; update();}
+function openCart(){update(); modal.classList.add('open');}
+function closeCart(){modal.classList.remove('open');}
+async function checkout(){
+  let items=Object.keys(cart).map(id=>{let p=products.find(x=>x.id==id); return {product_id:p.id,product_name:p.name,qty:cart[id],price:p.price}});
+  if(!items.length) return alert('السلة فاضية');
+  if(!fName.value||!fPhone.value||!fCity.value||!fAddr.value) return alert('كمل بياناتك الأول');
+  const r=await fetch(API+'/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name:fName.value,phone:fPhone.value,city:fCity.value,address:fAddr.value,notes:fNotes.value,items})});
+  const d=await r.json();
+  if(r.ok){msg.textContent='✅ تم استلام طلبك رقم #'+d.order_id+' - هنتواصل معاك قريب!'; cart={}; update();} else msg.textContent='في مشكلة حاول تاني';
+}
+load();
+</script></body></html>
